@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Spirit — Generative Type</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#000;
+  --sidebar-bg:rgba(7,7,7,0.97);
+  --border:rgba(255,255,255,0.07);
+  --border-mid:rgba(255,255,255,0.12);
+  --text:#fff;
+  --text-dim:rgba(255,255,255,0.4);
+  --text-faint:rgba(255,255,255,0.2);
+  --toolbar-bg:rgba(12,12,12,0.82);
+  --toolbar-border:rgba(255,255,255,0.13);
+  --accent:rgba(96,165,250,0.85);
+  --accent-bg:rgba(96,165,250,0.14);
+  --accent-border:rgba(96,165,250,0.5);
+}
+[data-theme="light"]{
+  --bg:#fff;
+  --sidebar-bg:rgba(248,248,248,0.97);
+  --border:rgba(0,0,0,0.07);
+  --border-mid:rgba(0,0,0,0.12);
+  --text:#000;
+  --text-dim:rgba(0,0,0,0.4);
+  --text-faint:rgba(0,0,0,0.2);
+  --toolbar-bg:rgba(244,244,244,0.88);
+  --toolbar-border:rgba(0,0,0,0.13);
+}
+html,body{width:100%;height:100%;background:var(--bg);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:var(--text);overflow:hidden}
+#canvasWrap{
+  position:fixed;top:0;left:0;right:272px;bottom:0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg);overflow:hidden;
+}
+#glCanvas{display:block;image-rendering:pixelated}
+#sidebar{
+  position:fixed;top:0;right:0;width:272px;height:100%;
+  background:var(--sidebar-bg);border-left:1px solid var(--border);
+  overflow-y:auto;overflow-x:hidden;z-index:10;
+  scrollbar-width:thin;scrollbar-color:var(--border-mid) transparent;
+}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-track{background:transparent}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border-mid);border-radius:2px}
+/* ── Section ── */
+.section{border-bottom:1px solid var(--border)}
+.section-btn{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:transparent;border:none;cursor:pointer;
+  color:var(--text-dim);font-family:inherit;font-size:10px;
+  text-transform:uppercase;letter-spacing:0.08em;transition:background 150ms;
+}
+.section-btn:hover{background:rgba(128,128,128,0.05)}
+.section-btn .chevron{transition:transform 200ms;opacity:0.45;flex-shrink:0}
+.section-btn.open .chevron{transform:rotate(180deg)}
+.section-body{padding:0 16px 14px;display:none}
+.section-body.open{display:block}
+/* ── Fields ── */
+.field{margin-top:10px}
+.label{font-size:10px;color:var(--text-dim);margin-bottom:5px;display:flex;justify-content:space-between;align-items:center}
+.label-val{color:var(--text-faint)}
+textarea,select,input[type="number"]{
+  width:100%;background:rgba(128,128,128,0.06);
+  border:1px solid var(--border-mid);border-radius:6px;
+  padding:7px 9px;color:var(--text);font-family:inherit;font-size:11px;
+  outline:none;appearance:none;transition:border-color 150ms;
+}
+textarea{resize:vertical;min-height:54px}
+textarea:focus,select:focus,input[type="number"]:focus{border-color:var(--accent-border)}
+input[type="range"]{
+  width:100%;height:3px;cursor:pointer;
+  background:var(--border-mid);border-radius:2px;
+  outline:none;appearance:none;accent-color:var(--accent);
+}
+input[type="range"]::-webkit-slider-thumb{
+  appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--text);cursor:pointer;margin-top:-5px;
+}
+input[type="range"]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:var(--border-mid)}
+/* ── Pills ── */
+.pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.pill-btn{
+  padding:5px 10px;border-radius:9999px;
+  border:1px solid var(--border-mid);background:transparent;
+  color:var(--text-dim);font-family:inherit;font-size:10px;
+  text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;transition:all 150ms;
+}
+.pill-btn:hover:not(.active){background:rgba(128,128,128,0.08)}
+.pill-btn.active{border-color:var(--accent-border);background:var(--accent-bg);color:var(--accent)}
+/* ── Color pickers ── */
+#colorPickers{margin-top:10px}
+.color-row{display:flex;gap:8px}
+.color-item{flex:1;display:flex;flex-direction:column;gap:5px}
+.color-label{font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em}
+.color-swatch{
+  height:30px;border-radius:6px;border:1px solid var(--border-mid);
+  cursor:pointer;overflow:hidden;position:relative;
+}
+.color-swatch input[type="color"]{
+  position:absolute;inset:-6px;width:calc(100%+12px);height:calc(100%+12px);
+  border:none;padding:0;cursor:pointer;opacity:0;
+}
+.color-preview{width:100%;height:100%;pointer-events:none;border-radius:5px}
+/* ── Canvas controls ── */
+.canvas-row{display:flex;gap:8px;align-items:flex-end;margin-top:10px}
+.canvas-row .field{flex:1;margin-top:0}
+.apply-btn{
+  padding:7px 12px;background:var(--accent-bg);border:1px solid var(--accent-border);
+  border-radius:6px;color:var(--accent);font-family:inherit;font-size:10px;
+  text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;
+  transition:all 150ms;white-space:nowrap;flex-shrink:0;
+}
+.apply-btn:hover{background:rgba(96,165,250,0.25)}
+/* ── Toolbar ── */
+#toolbar{
+  position:fixed;bottom:20px;left:50%;
+  transform:translateX(calc(-50% - 136px));
+  background:var(--toolbar-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--toolbar-border);border-radius:16px;
+  padding:8px 12px;display:flex;align-items:center;gap:8px;z-index:20;
+  user-select:none;
+}
+.tb-btn{
+  width:32px;height:32px;border-radius:8px;background:transparent;
+  border:1px solid var(--border-mid);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-dim);transition:all 150ms;font-family:inherit;flex-shrink:0;
+}
+.tb-btn:hover{background:rgba(128,128,128,0.1);color:var(--text)}
+.tb-btn.play-on{border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.1);color:rgba(239,68,68,0.85)}
+.tb-btn.play-off{border-color:var(--accent-border);background:var(--accent-bg);color:var(--accent)}
+.tb-sep{width:1px;height:20px;background:var(--border-mid);flex-shrink:0}
+.tb-group{display:flex;flex-direction:column;align-items:center;gap:3px}
+.tb-tiny{font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.07em;white-space:nowrap}
+.tb-speed-track{width:72px}
+.stability-wrap{min-width:58px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.stab-bar-bg{width:58px;height:4px;background:var(--border-mid);border-radius:2px;overflow:hidden}
+.stab-bar{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width 0.4s}
+.export-btn{
+  padding:5px 9px;border-radius:6px;background:transparent;
+  border:1px solid var(--border-mid);color:var(--text-dim);
+  font-family:inherit;font-size:9px;text-transform:uppercase;
+  letter-spacing:0.06em;cursor:pointer;transition:all 150ms;flex-shrink:0;
+}
+.export-btn:hover{background:rgba(128,128,128,0.1);color:var(--text)}
+.export-btn.rec-on{border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.1);color:rgba(239,68,68,0.85)}
+/* ── Theme toggle ── */
+#themeToggle{
+  position:fixed;bottom:20px;left:20px;
+  width:32px;height:32px;border-radius:50%;
+  background:var(--toolbar-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--toolbar-border);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-dim);z-index:20;transition:all 150ms;
+}
+#themeToggle:hover{background:rgba(128,128,128,0.15);color:var(--text)}
+/* ── Error banner ── */
+#errorBanner{
+  display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);
+  color:rgba(239,68,68,0.9);padding:8px 18px;border-radius:8px;font-size:11px;
+  z-index:100;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);max-width:480px;text-align:center;
+}
+/* param panels */
+.param-panel{display:none}
+.param-panel.active{display:block}
+</style>
+</head>
+<body>
+
+<!-- Canvas area -->
+<div id="canvasWrap">
+  <canvas id="glCanvas"></canvas>
+</div>
+
+<!-- Right sidebar -->
+<div id="sidebar">
+
+  <!-- TEXT -->
+  <div class="section">
+    <button class="section-btn open" data-sec="text">
+      Text
+      <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 4.5l4 3 4-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="section-body open" id="sec-text">
+      <div class="field" style="margin-top:4px">
+        <div class="label">Content</div>
+        <textarea id="txtInput" rows="2" spellcheck="false">Spirit</textarea>
+      </div>
+      <div class="field">
+        <div class="label">Font</div>
+        <select id="fontSel">
+          <option value="ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace">Monospace</option>
+          <option value="Georgia,serif">Georgia</option>
+          <option value="Impact,Arial Black,sans-serif">Impact</option>
+          <option value="Arial Black,Arial,sans-serif">Arial Black</option>
+          <option value="Arial,Helvetica,sans-serif">Arial</option>
+          <option value="Times New Roman,Times,serif">Times New Roman</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="label">Weight</div>
+        <select id="fontWeight">
+          <option value="400">Regular 400</option>
+          <option value="600">Semibold 600</option>
+          <option value="700">Bold 700</option>
+          <option value="800" selected>Extrabold 800</option>
+          <option value="900">Black 900</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="label">Font Size <span class="label-val" id="fontSizeVal">120</span></div>
+        <input type="range" id="fontSize" min="40" max="400" value="120"/>
+      </div>
+      <div class="field">
+        <div class="label">Letter Spacing <span class="label-val" id="letterSpacingVal">0</span></div>
+        <input type="range" id="letterSpacing" min="-20" max="80" value="0"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- EFFECT -->
+  <div class="section">
+    <button class="section-btn open" data-sec="effect">
+      Effect
+      <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 4.5l4 3 4-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="section-body open" id="sec-effect">
+      <div class="field" style="margin-top:4px">
+        <div class="pills" id="effectPills">
+          <button class="pill-btn active" data-effect="physarum">Network</button>
+          <button class="pill-btn" data-effect="rdmaze">RD Maze</button>
+          <button class="pill-btn" data-effect="life">Life</button>
+          <button class="pill-btn" data-effect="rdspots">RD Spots</button>
+        </div>
+      </div>
+
+      <!-- Physarum params -->
+      <div class="param-panel active" id="params-physarum">
+        <div class="field">
+          <div class="label">Agents <span class="label-val" id="agentCountVal">65536</span></div>
+          <input type="range" id="agentCount" min="4096" max="262144" step="4096" value="65536"/>
+        </div>
+        <div class="field">
+          <div class="label">Sensor Angle <span class="label-val" id="sensorAngleVal">30</span>°</div>
+          <input type="range" id="sensorAngle" min="5" max="90" value="30"/>
+        </div>
+        <div class="field">
+          <div class="label">Sensor Distance <span class="label-val" id="sensorDistVal">12</span></div>
+          <input type="range" id="sensorDist" min="4" max="40" value="12"/>
+        </div>
+        <div class="field">
+          <div class="label">Turn Angle <span class="label-val" id="turnAngleVal">25</span>°</div>
+          <input type="range" id="turnAngle" min="5" max="90" value="25"/>
+        </div>
+        <div class="field">
+          <div class="label">Speed <span class="label-val" id="physSpeedVal">1.5</span></div>
+          <input type="range" id="physSpeed" min="0.3" max="5" step="0.1" value="1.5"/>
+        </div>
+        <div class="field">
+          <div class="label">Decay <span class="label-val" id="decayVal">0.970</span></div>
+          <input type="range" id="decay" min="0.90" max="0.999" step="0.001" value="0.970"/>
+        </div>
+      </div>
+
+      <!-- RD params -->
+      <div class="param-panel" id="params-rd">
+        <div class="field">
+          <div class="label">Feed (f) <span class="label-val" id="rdFVal">0.029</span></div>
+          <input type="range" id="rdF" min="0.010" max="0.080" step="0.001" value="0.029"/>
+        </div>
+        <div class="field">
+          <div class="label">Kill (k) <span class="label-val" id="rdKVal">0.057</span></div>
+          <input type="range" id="rdK" min="0.030" max="0.080" step="0.001" value="0.057"/>
+        </div>
+        <div class="field">
+          <div class="label">Diffuse A <span class="label-val" id="rdDAVal">0.210</span></div>
+          <input type="range" id="rdDA" min="0.050" max="0.400" step="0.005" value="0.210"/>
+        </div>
+        <div class="field">
+          <div class="label">Diffuse B <span class="label-val" id="rdDBVal">0.105</span></div>
+          <input type="range" id="rdDB" min="0.020" max="0.200" step="0.005" value="0.105"/>
+        </div>
+        <div class="field">
+          <div class="label">Timestep <span class="label-val" id="rdDTVal">1.0</span></div>
+          <input type="range" id="rdDT" min="0.2" max="2.0" step="0.1" value="1.0"/>
+        </div>
+      </div>
+
+      <!-- Life params -->
+      <div class="param-panel" id="params-life">
+        <div class="field">
+          <div class="label">Variant</div>
+          <div class="pills" id="lifePills">
+            <button class="pill-btn active" data-life="classic">Classic</button>
+            <button class="pill-btn" data-life="highlife">Highlife</button>
+            <button class="pill-btn" data-life="34life">34Life</button>
+          </div>
+        </div>
+        <div class="field">
+          <div class="label">Init Density <span class="label-val" id="lifeDensityVal">0.65</span></div>
+          <input type="range" id="lifeDensity" min="0.20" max="0.95" step="0.05" value="0.65"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLOR -->
+  <div class="section">
+    <button class="section-btn open" data-sec="color">
+      Color
+      <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 4.5l4 3 4-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="section-body open" id="sec-color">
+      <div class="field" style="margin-top:4px">
+        <div class="pills" id="colorPills">
+          <button class="pill-btn active" data-color="bw">B&amp;W</button>
+          <button class="pill-btn" data-color="2tone">2-Tone</button>
+          <button class="pill-btn" data-color="3tone">3-Tone</button>
+        </div>
+      </div>
+      <div id="colorPickers" style="display:none">
+        <div class="color-row" style="margin-top:10px">
+          <div class="color-item">
+            <div class="color-label">Background</div>
+            <div class="color-swatch">
+              <div class="color-preview" id="prevBg" style="background:#000000"></div>
+              <input type="color" id="colorBg" value="#000000"/>
+            </div>
+          </div>
+          <div class="color-item">
+            <div class="color-label">Color 1</div>
+            <div class="color-swatch">
+              <div class="color-preview" id="prevC1" style="background:#60a5fa"></div>
+              <input type="color" id="colorC1" value="#60a5fa"/>
+            </div>
+          </div>
+          <div class="color-item" id="c2item">
+            <div class="color-label">Color 2</div>
+            <div class="color-swatch">
+              <div class="color-preview" id="prevC2" style="background:#f472b6"></div>
+              <input type="color" id="colorC2" value="#f472b6"/>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="section">
+    <button class="section-btn open" data-sec="canvas">
+      Canvas
+      <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 4.5l4 3 4-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="section-body open" id="sec-canvas">
+      <div class="canvas-row">
+        <div class="field">
+          <div class="label">Width</div>
+          <input type="number" id="canvasW" value="800" min="100" max="2400"/>
+        </div>
+        <div class="field">
+          <div class="label">Height</div>
+          <input type="number" id="canvasH" value="400" min="100" max="1600"/>
+        </div>
+        <button class="apply-btn" id="applyCanvas">Apply</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /sidebar -->
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <!-- Play/Pause -->
+  <button class="tb-btn play-off" id="playBtn" title="Play / Pause (Space)">
+    <svg id="playIcon" width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+      <path d="M3 2l9 5-9 5z"/>
+    </svg>
+  </button>
+  <!-- Reset -->
+  <button class="tb-btn" id="resetBtn" title="Reset">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2.5 7a4.5 4.5 0 107-3.95M2.5 3v4h4"/>
+    </svg>
+  </button>
+  <!-- Step -->
+  <button class="tb-btn" id="stepBtn" title="Step once">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+      <path d="M3 2l7 5-7 5z"/><rect x="10.5" y="2" width="1.5" height="10" rx="0.5"/>
+    </svg>
+  </button>
+  <div class="tb-sep"></div>
+  <!-- Speed -->
+  <div class="tb-group">
+    <div class="tb-tiny">Speed&nbsp;<span id="speedMultVal">1</span>×</div>
+    <input class="tb-speed-track" type="range" id="speedMult" min="1" max="20" value="1" title="Steps per frame"/>
+  </div>
+  <div class="tb-sep"></div>
+  <!-- Stability -->
+  <div class="stability-wrap">
+    <div class="tb-tiny">Stability</div>
+    <div class="stab-bar-bg"><div class="stab-bar" id="stabBar"></div></div>
+    <div class="tb-tiny" id="stepCount">Step 0</div>
+  </div>
+  <div class="tb-sep"></div>
+  <!-- Exports -->
+  <button class="export-btn" id="exportPng" title="Export PNG">PNG</button>
+  <button class="export-btn" id="exportSvg" title="Export SVG">SVG</button>
+  <button class="export-btn" id="recBtn" title="Record WebM">REC</button>
+</div>
+
+<!-- Theme toggle -->
+<button id="themeToggle" title="Toggle light/dark mode">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <circle cx="7" cy="7" r="2.5" fill="currentColor" stroke="none"/>
+    <line x1="7" y1="0.5" x2="7" y2="2"/>
+    <line x1="7" y1="12" x2="7" y2="13.5"/>
+    <line x1="0.5" y1="7" x2="2" y2="7"/>
+    <line x1="12" y1="7" x2="13.5" y2="7"/>
+    <line x1="2.55" y1="2.55" x2="3.6" y2="3.6"/>
+    <line x1="10.4" y1="10.4" x2="11.45" y2="11.45"/>
+    <line x1="11.45" y1="2.55" x2="10.4" y2="3.6"/>
+    <line x1="3.6" y1="10.4" x2="2.55" y2="11.45"/>
+  </svg>
+</button>
+
+<!-- Error banner -->
+<div id="errorBanner"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GLSL SOURCES
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VS_QUAD = /* glsl */`#version 300 es
+in vec2 a_pos;
+out vec2 v_uv;
+void main(){
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}`;
+
+// ── Display ──────────────────────────────────────────────────────────────────
+const FS_DISPLAY = /* glsl */`#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_tex;
+uniform int u_srcType;    // 0=physarum  1=rd  2=life
+uniform int u_colorMode;  // 0=bw  1=2tone  2=3tone
+uniform vec3 u_bg;
+uniform vec3 u_c1;
+uniform vec3 u_c2;
+
+vec3 colorAt(float t){
+  if(u_colorMode <= 1){
+    return mix(u_bg, u_c1, t);
+  } else {
+    if(t < 0.5) return mix(u_bg, u_c1, t * 2.0);
+    else        return mix(u_c1, u_c2, (t - 0.5) * 2.0);
+  }
+}
+
+void main(){
+  vec4 s  = texture(u_tex, v_uv);
+  float t = 0.0;
+  if(u_srcType == 0){
+    // physarum: trail in .r — use smoothstep to emphasize network paths over diffuse background
+    t = smoothstep(0.08, 0.55, s.r);
+  } else if(u_srcType == 1){
+    // RD: A in .r, B in .g, maskflag in .b  (0=outside letter, 1=inside)
+    float B  = s.g;
+    float mf = s.b; // 0 outside letter → forces t=0 → background
+    t = mf * (1.0 - clamp(B * 3.5, 0.0, 1.0));
+  } else {
+    // GoL: alive in .r
+    t = s.r > 0.5 ? 1.0 : 0.0;
+  }
+  fragColor = vec4(colorAt(t), 1.0);
+}`;
+
+// ── Physarum: agent update ────────────────────────────────────────────────────
+const FS_AGENT_UPDATE = /* glsl */`#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_agents;  // RGBA32F: (x/W, y/H, angle/TAU, alive)
+uniform sampler2D u_trail;   // R32F
+uniform sampler2D u_mask;    // R32F
+uniform vec2  u_res;
+uniform float u_sensorAngle; // radians
+uniform float u_sensorDist;  // pixels
+uniform float u_turnAngle;   // radians
+uniform float u_speed;       // pixels/step
+uniform float u_time;
+uniform float u_rnd;
+
+const float PI  = 3.14159265359;
+const float TAU = 6.28318530718;
+
+float hash21(vec2 p){
+  p = fract(p * vec2(234.34, 435.345));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
+}
+
+float sampleTrail(vec2 pixPos, float ang){
+  vec2 sp  = pixPos + vec2(cos(ang), sin(ang)) * u_sensorDist;
+  vec2 uv  = sp / u_res;
+  uv = clamp(uv, 0.001, 0.999);
+  return texture(u_trail, uv).r;
+}
+
+bool maskOK(vec2 pixPos){
+  vec2 uv = pixPos / u_res;
+  if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0) return false;
+  return texture(u_mask, uv).r > 0.45;
+}
+
+void main(){
+  vec4 agent = texture(u_agents, v_uv);
+  float alive = agent.a;
+  if(alive < 0.5){ fragColor = agent; return; }
+
+  float x   = agent.r * u_res.x;
+  float y   = agent.g * u_res.y;
+  float ang = agent.b * TAU;
+
+  // Sense
+  float fwd   = sampleTrail(vec2(x,y), ang);
+  float left  = sampleTrail(vec2(x,y), ang + u_sensorAngle);
+  float right = sampleTrail(vec2(x,y), ang - u_sensorAngle);
+
+  // Random seed per agent per step
+  float rnd = hash21(v_uv + vec2(u_rnd * 1.73, u_time * 0.0013));
+
+  // Turn
+  if(fwd >= left && fwd >= right){
+    // go straight – small random wobble
+    ang += (rnd - 0.5) * 0.05;
+  } else if(left > right){
+    ang += u_turnAngle;
+  } else if(right > left){
+    ang -= u_turnAngle;
+  } else {
+    ang += (rnd - 0.5) * u_turnAngle * 2.0;
+  }
+
+  // Move
+  float nx = x + cos(ang) * u_speed;
+  float ny = y + sin(ang) * u_speed;
+
+  // Bounce if outside mask
+  if(!maskOK(vec2(nx, ny))){
+    // try 180 + jitter
+    ang = ang + PI + (rnd - 0.5) * 1.2;
+    nx = x + cos(ang) * u_speed * 0.5;
+    ny = y + sin(ang) * u_speed * 0.5;
+    if(!maskOK(vec2(nx, ny))){
+      // just stay
+      nx = x; ny = y;
+      ang = ang + PI + rnd * TAU * 0.25;
+    }
+  }
+
+  nx = clamp(nx, 0.0, u_res.x - 0.001);
+  ny = clamp(ny, 0.0, u_res.y - 0.001);
+  ang = mod(ang, TAU);
+
+  fragColor = vec4(nx / u_res.x, ny / u_res.y, ang / TAU, 1.0);
+}`;
+
+// ── Physarum: deposit (VS renders POINTS from agent positions) ────────────────
+const VS_DEPOSIT = /* glsl */`#version 300 es
+precision highp float;
+uniform sampler2D u_agents;
+uniform vec2 u_agentTexSize;
+void main(){
+  int tx = gl_VertexID % int(u_agentTexSize.x);
+  int ty = gl_VertexID / int(u_agentTexSize.x);
+  vec2 uv = (vec2(tx, ty) + 0.5) / u_agentTexSize;
+  vec4 agent = texture(u_agents, uv);
+  // If not alive, push off-screen
+  float alive = agent.a;
+  vec2 pos = agent.rg;          // 0..1 in texel space
+  pos = pos * 2.0 - 1.0;       // -1..1 NDC
+  pos.y = -pos.y;               // flip Y (texture Y=0 at top)
+  gl_Position = vec4(pos * alive + (1.0 - alive) * vec2(9.0), 0.0, 1.0);
+  gl_PointSize = 1.5;
+}`;
+
+const FS_DEPOSIT = /* glsl */`#version 300 es
+precision highp float;
+out vec4 fragColor;
+void main(){
+  // Deposit trail; smaller value → less saturation → clearer network paths
+  fragColor = vec4(0.04, 0.0, 0.0, 1.0);
+}`;
+
+// ── Physarum: diffuse + decay ─────────────────────────────────────────────────
+const FS_DIFFUSE = /* glsl */`#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_trail;
+uniform vec2  u_res;
+uniform float u_decay;
+
+void main(){
+  vec2 px = 1.0 / u_res;
+  float s = 0.0;
+  for(int dy=-1;dy<=1;dy++){
+    for(int dx=-1;dx<=1;dx++){
+      s += texture(u_trail, v_uv + vec2(dx,dy) * px).r;
+    }
+  }
+  s /= 9.0;
+  float cur = texture(u_trail, v_uv).r;
+  float blurred = mix(cur, s, 0.35);
+  fragColor = vec4(blurred * u_decay, 0.0, 0.0, 1.0);
+}`;
+
+// ── Reaction-Diffusion (Gray-Scott) ──────────────────────────────────────────
+const FS_RD = /* glsl */`#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_state;  // RGBA32F: r=A, g=B
+uniform sampler2D u_mask;   // R32F
+uniform vec2  u_res;
+uniform float u_f;
+uniform float u_k;
+uniform float u_dA;
+uniform float u_dB;
+uniform float u_dt;
+
+void main(){
+  float m = texture(u_mask, v_uv).r;
+  if(m < 0.08){
+    // Outside letter — reset to equilibrium
+    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  vec4 cur = texture(u_state, v_uv);
+  float A = cur.r;
+  float B = cur.g;
+
+  vec2 px = 1.0 / u_res;
+  vec4 l  = texture(u_state, v_uv + vec2(-px.x, 0.0));
+  vec4 r  = texture(u_state, v_uv + vec2( px.x, 0.0));
+  vec4 up = texture(u_state, v_uv + vec2(0.0, -px.y));
+  vec4 dn = texture(u_state, v_uv + vec2(0.0,  px.y));
+
+  float lapA = l.r + r.r + up.r + dn.r - 4.0*A;
+  float lapB = l.g + r.g + up.g + dn.g - 4.0*B;
+
+  float ABB  = A * B * B;
+  float newA = clamp(A + (u_dA * lapA - ABB + u_f * (1.0 - A)) * u_dt, 0.0, 1.0);
+  float newB = clamp(B + (u_dB * lapB + ABB - (u_k + u_f) * B) * u_dt, 0.0, 1.0);
+
+  fragColor = vec4(newA, newB, cur.b, 1.0); // preserve mask flag in .b
+}`;
+
+// ── GoL: upload state as float texture, display directly ─────────────────────
+// (No extra shader needed — life state is uploaded to a float tex and
+//  displayed by the display shader as srcType=2)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOBALS
+// ─────────────────────────────────────────────────────────────────────────────
+let gl, canvas;
+let simW = 800, simH = 400;
+let playing = false;
+let stepN   = 0;
+let stepsPerFrame = 1;
+
+let currentEffect = 'physarum'; // physarum | rdmaze | rdspots | life
+let colorMode = 'bw';           // bw | 2tone | 3tone
+let isDark = true;
+
+// color picker state
+let clrBg = [0,0,0], clrC1 = [0.376,0.647,0.98], clrC2 = [0.957,0.447,0.714];
+
+// physarum params
+let PP = {
+  agentCount  : 65536,
+  sensorAngle : 30 * Math.PI / 180,
+  sensorDist  : 12,
+  turnAngle   : 25 * Math.PI / 180,
+  speed       : 1.5,
+  decay       : 0.97,
+};
+
+// RD params
+let RP = { f:0.029, k:0.057, dA:0.210, dB:0.105, dt:1.0 };
+
+// Life params
+let lifeVariant = 'classic';
+let lifeDensity = 0.65;
+
+// stability tracking
+let stability = 0;
+let stabHistory = [];
+let prevLifeArr = null;
+
+// WebGL resources
+let progs = {};
+let bufs  = {};
+let texs  = {};
+let fbos  = {};
+let agentTexW = 256, agentTexH = 256;
+
+// effect resource pools
+let phys = {}, rd = {}, life = {};
+
+// media recorder
+let mediaRec = null;
+let isRec = false;
+
+// text mask data
+let maskData = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WEBGL HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function initWebGL() {
+  canvas = document.getElementById('glCanvas');
+  gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
+  if (!gl) { showError('WebGL2 not available in this browser.'); return false; }
+  if (!gl.getExtension('EXT_color_buffer_float')) {
+    showError('EXT_color_buffer_float not supported — float textures unavailable.'); return false;
+  }
+  gl.getExtension('OES_texture_float_linear'); // best-effort
+  canvas.addEventListener('webglcontextlost', ev => {
+    ev.preventDefault(); showError('WebGL context lost. Try refreshing.');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    hideError(); bootstrap();
+  });
+  return true;
+}
+
+function compileShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(s);
+    console.error('Shader compile error:\n', log, '\nSource:\n', src);
+    showError('Shader error: ' + log.split('\n')[0]);
+    gl.deleteShader(s);
+    return null;
+  }
+  return s;
+}
+
+function linkProgram(vsSrc, fsSrc) {
+  const vs = compileShader(gl.VERTEX_SHADER,   vsSrc);
+  const fs = compileShader(gl.FRAGMENT_SHADER, fsSrc);
+  if (!vs || !fs) return null;
+  const p = gl.createProgram();
+  gl.attachShader(p, vs); gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  gl.deleteShader(vs); gl.deleteShader(fs);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    showError('Program link error: ' + gl.getProgramInfoLog(p));
+    gl.deleteProgram(p); return null;
+  }
+  return p;
+}
+
+function makeFloatTex(w, h, internalFmt, fmt, filter, data) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internalFmt, w, h, 0, fmt, gl.FLOAT, data || null);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  return t;
+}
+
+function makeR32F(w, h, data)    { return makeFloatTex(w, h, gl.R32F,    gl.RED,  gl.LINEAR,  data); }
+function makeRGBA32F(w, h, data) { return makeFloatTex(w, h, gl.RGBA32F, gl.RGBA, gl.NEAREST, data); }
+
+function makeFBO(tex) {
+  const f = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    console.warn('FBO incomplete for tex', tex);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return f;
+}
+
+function deleteTex(t)  { if (t) gl.deleteTexture(t); }
+function deleteFBO(f)  { if (f) gl.deleteFramebuffer(f); }
+
+// fullscreen quad VAO
+function makeQuadVAO(prog) {
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufs.quad);
+  const loc = gl.getAttribLocation(prog, 'a_pos');
+  if (loc >= 0) {
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  }
+  gl.bindVertexArray(null);
+  return vao;
+}
+
+// bind a texture to a sampler uniform
+function bindTex(prog, name, unit, tex) {
+  const loc = gl.getUniformLocation(prog, name);
+  if (loc == null) return;
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform1i(loc, unit);
+}
+
+// draw a fullscreen quad using a cached VAO
+const _vaos = new WeakMap();
+function drawQuad(prog) {
+  if (!_vaos.has(prog)) _vaos.set(prog, makeQuadVAO(prog));
+  gl.bindVertexArray(_vaos.get(prog));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.bindVertexArray(null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEXT MASK
+// ─────────────────────────────────────────────────────────────────────────────
+function makeTextMask(text, font, weight, size, spacing, w, h) {
+  const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#fff';
+  ctx.font = `${weight} ${size}px ${font}`;
+  try { ctx.letterSpacing = spacing + 'px'; } catch (_) {}
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lines = text.split('\n');
+  const lh = size * 1.2;
+  const startY = h / 2 - (lines.length - 1) * lh / 2;
+  lines.forEach((l, i) => ctx.fillText(l, w / 2, startY + i * lh));
+  const d = ctx.getImageData(0, 0, w, h).data;
+  const mask = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) mask[i] = d[i * 4] / 255;
+  return mask;
+}
+
+function rebuildMask() {
+  const text   = document.getElementById('txtInput').value || 'Spirit';
+  const font   = document.getElementById('fontSel').value;
+  const weight = document.getElementById('fontWeight').value;
+  const size   = parseInt(document.getElementById('fontSize').value);
+  const spc    = parseInt(document.getElementById('letterSpacing').value);
+  maskData = makeTextMask(text, font, weight, size, spc, simW, simH);
+  deleteTex(texs.mask);
+  texs.mask = makeR32F(simW, simH, maskData);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPILE PROGRAMS
+// ─────────────────────────────────────────────────────────────────────────────
+function compilePrograms() {
+  progs.display     = linkProgram(VS_QUAD, FS_DISPLAY);
+  progs.agentUpdate = linkProgram(VS_QUAD, FS_AGENT_UPDATE);
+  progs.deposit     = linkProgram(VS_DEPOSIT, FS_DEPOSIT);
+  progs.diffuse     = linkProgram(VS_QUAD, FS_DIFFUSE);
+  progs.rd          = linkProgram(VS_QUAD, FS_RD);
+  bufs.quad = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufs.quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHYSARUM
+// ─────────────────────────────────────────────────────────────────────────────
+function initPhysarum() {
+  // Decide agent texture dimensions
+  const n    = PP.agentCount;
+  const side = Math.ceil(Math.sqrt(n));
+  agentTexW = side; agentTexH = side;
+  const total = side * side;
+
+  // Collect pixels inside mask
+  const validPx = [];
+  for (let i = 0; i < maskData.length; i++) {
+    if (maskData[i] > 0.5) validPx.push(i);
+  }
+  if (validPx.length === 0) {
+    // fallback: entire canvas
+    for (let i = 0; i < maskData.length; i++) validPx.push(i);
+  }
+
+  const agentData = new Float32Array(total * 4);
+  for (let i = 0; i < total; i++) {
+    if (i < n) {
+      const idx = validPx[(Math.random() * validPx.length) | 0];
+      const px = ((idx % simW) + 0.5) / simW;
+      const py = (((idx / simW) | 0) + 0.5) / simH;
+      agentData[i*4+0] = px;
+      agentData[i*4+1] = py;
+      agentData[i*4+2] = Math.random(); // angle/TAU
+      agentData[i*4+3] = 1.0;           // alive
+    }
+    // else stays 0 (dead)
+  }
+
+  // Clean up old resources
+  deleteTex(phys.agTex0); deleteTex(phys.agTex1);
+  deleteTex(phys.trTex0); deleteTex(phys.trTex1);
+  deleteFBO(phys.agFBO0); deleteFBO(phys.agFBO1);
+  deleteFBO(phys.trFBO0); deleteFBO(phys.trFBO1);
+
+  phys.agTex0 = makeRGBA32F(side, side, agentData);
+  phys.agTex1 = makeRGBA32F(side, side, null);
+  phys.agFBO0 = makeFBO(phys.agTex0);
+  phys.agFBO1 = makeFBO(phys.agTex1);
+
+  phys.trTex0 = makeR32F(simW, simH, null);
+  phys.trTex1 = makeR32F(simW, simH, null);
+  phys.trFBO0 = makeFBO(phys.trTex0);
+  phys.trFBO1 = makeFBO(phys.trTex1);
+
+  // Set ping-pong read/write pointers
+  phys.agRead = phys.agTex0; phys.agWrite = phys.agTex1;
+  phys.agFR   = phys.agFBO0; phys.agFW    = phys.agFBO1;
+  phys.trRead = phys.trTex0; phys.trWrite = phys.trTex1;
+  phys.trFR   = phys.trFBO0; phys.trFW    = phys.trFBO1;
+
+  // Pre-warm
+  for (let i = 0; i < 200; i++) physStep();
+}
+
+let physTime = 0;
+function physStep() {
+  physTime++;
+  // 1) Agent update ──────────────────────────────────────────────────────────
+  const ua = progs.agentUpdate;
+  gl.useProgram(ua);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, phys.agFW);
+  gl.viewport(0, 0, agentTexW, agentTexH);
+  bindTex(ua, 'u_agents', 0, phys.agRead);
+  bindTex(ua, 'u_trail',  1, phys.trRead);
+  bindTex(ua, 'u_mask',   2, texs.mask);
+  gl.uniform2f(gl.getUniformLocation(ua,'u_res'),         simW, simH);
+  gl.uniform1f(gl.getUniformLocation(ua,'u_sensorAngle'), PP.sensorAngle);
+  gl.uniform1f(gl.getUniformLocation(ua,'u_sensorDist'),  PP.sensorDist);
+  gl.uniform1f(gl.getUniformLocation(ua,'u_turnAngle'),   PP.turnAngle);
+  gl.uniform1f(gl.getUniformLocation(ua,'u_speed'),       PP.speed);
+  gl.uniform1f(gl.getUniformLocation(ua,'u_time'),        physTime);
+  gl.uniform1f(gl.getUniformLocation(ua,'u_rnd'),         Math.random());
+  drawQuad(ua);
+  // swap agent ping-pong
+  [phys.agRead, phys.agWrite] = [phys.agWrite, phys.agRead];
+  [phys.agFR,   phys.agFW  ] = [phys.agFW,    phys.agFR  ];
+
+  // 2) Deposit (draw agents as POINTS into trail) ───────────────────────────
+  const ud = progs.deposit;
+  gl.useProgram(ud);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, phys.trFR);
+  gl.viewport(0, 0, simW, simH);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE);
+  bindTex(ud, 'u_agents', 0, phys.agRead);
+  gl.uniform2f(gl.getUniformLocation(ud,'u_agentTexSize'), agentTexW, agentTexH);
+  gl.drawArrays(gl.POINTS, 0, agentTexW * agentTexH);
+  gl.disable(gl.BLEND);
+
+  // 3) Diffuse + decay ───────────────────────────────────────────────────────
+  const uf = progs.diffuse;
+  gl.useProgram(uf);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, phys.trFW);
+  gl.viewport(0, 0, simW, simH);
+  bindTex(uf, 'u_trail', 0, phys.trRead);
+  gl.uniform2f(gl.getUniformLocation(uf,'u_res'),   simW, simH);
+  gl.uniform1f(gl.getUniformLocation(uf,'u_decay'), PP.decay);
+  drawQuad(uf);
+  // swap trail ping-pong
+  [phys.trRead, phys.trWrite] = [phys.trWrite, phys.trRead];
+  [phys.trFR,   phys.trFW  ] = [phys.trFW,    phys.trFR  ];
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REACTION-DIFFUSION
+// ─────────────────────────────────────────────────────────────────────────────
+function initRD() {
+  const data = new Float32Array(simW * simH * 4);
+  for (let i = 0; i < simW * simH; i++) {
+    const inMask = maskData[i] > 0.5;
+    data[i*4+0] = 1.0; // A
+    data[i*4+1] = (inMask && Math.random() < 0.45) ? 0.5 + Math.random() * 0.15 : 0.0; // B
+    data[i*4+2] = inMask ? 1.0 : 0.0; // mask flag preserved in b-channel
+    data[i*4+3] = 1.0;
+  }
+  deleteTex(rd.tex0); deleteTex(rd.tex1);
+  deleteFBO(rd.fbo0); deleteFBO(rd.fbo1);
+  rd.tex0 = makeRGBA32F(simW, simH, data);
+  rd.tex1 = makeRGBA32F(simW, simH, null);
+  rd.fbo0 = makeFBO(rd.tex0);
+  rd.fbo1 = makeFBO(rd.tex1);
+  rd.read = rd.tex0; rd.write = rd.tex1;
+  rd.fboR = rd.fbo0; rd.fboW  = rd.fbo1;
+}
+
+function rdStep() {
+  const p = progs.rd;
+  gl.useProgram(p);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, rd.fboW);
+  gl.viewport(0, 0, simW, simH);
+  bindTex(p, 'u_state', 0, rd.read);
+  bindTex(p, 'u_mask',  1, texs.mask);
+  gl.uniform2f(gl.getUniformLocation(p,'u_res'), simW, simH);
+  gl.uniform1f(gl.getUniformLocation(p,'u_f'),   RP.f);
+  gl.uniform1f(gl.getUniformLocation(p,'u_k'),   RP.k);
+  gl.uniform1f(gl.getUniformLocation(p,'u_dA'),  RP.dA);
+  gl.uniform1f(gl.getUniformLocation(p,'u_dB'),  RP.dB);
+  gl.uniform1f(gl.getUniformLocation(p,'u_dt'),  RP.dt);
+  drawQuad(p);
+  [rd.read, rd.write] = [rd.write, rd.read];
+  [rd.fboR, rd.fboW]  = [rd.fboW,  rd.fboR];
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAME OF LIFE
+// ─────────────────────────────────────────────────────────────────────────────
+function lifeApplyRule(variant, alive, n) {
+  if (variant === 'classic') {
+    return alive ? (n === 2 || n === 3) : n === 3;
+  } else if (variant === 'highlife') {
+    return alive ? (n === 2 || n === 3) : (n === 3 || n === 6);
+  } else { // 34life
+    return (n === 3 || n === 4);
+  }
+}
+
+function initLife() {
+  const w = simW, h = simH;
+  life.w = w; life.h = h;
+  life.cur  = new Uint8Array(w * h);
+  life.next = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    if (maskData[i] > 0.5 && Math.random() < lifeDensity) life.cur[i] = 1;
+  }
+  deleteTex(life.tex);
+  life.tex = makeFloatTex(w, h, gl.RGBA32F, gl.RGBA, gl.NEAREST, lifeToFloat32());
+  prevLifeArr = null;
+}
+
+function lifeToFloat32() {
+  const d = new Float32Array(life.w * life.h * 4);
+  for (let i = 0; i < life.w * life.h; i++) d[i*4] = life.cur[i];
+  return d;
+}
+
+function lifeStep() {
+  const w = life.w, h = life.h;
+  const cur = life.cur, next = life.next;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx2 = (x + dx + w) % w;
+          const ny2 = (y + dy + h) % h;
+          n += cur[ny2 * w + nx2];
+        }
+      }
+      next[y * w + x] = lifeApplyRule(lifeVariant, cur[y*w+x], n) ? 1 : 0;
+    }
+  }
+  life.cur  = next;
+  life.next = cur;
+  // Upload to GPU
+  gl.bindTexture(gl.TEXTURE_2D, life.tex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, life.w, life.h, gl.RGBA, gl.FLOAT, lifeToFloat32());
+  gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STABILITY
+// ─────────────────────────────────────────────────────────────────────────────
+function tickStability() {
+  if (currentEffect === 'life') {
+    if (!prevLifeArr) { prevLifeArr = new Uint8Array(life.cur); }
+    let diff = 0;
+    for (let i = 0; i < life.cur.length; i++) if (life.cur[i] !== prevLifeArr[i]) diff++;
+    prevLifeArr.set(life.cur);
+    const rate = diff / life.cur.length;
+    stabHistory.push(rate < 0.001 ? 1 : 0);
+    if (stabHistory.length > 40) stabHistory.shift();
+    stability = stabHistory.reduce((a,b)=>a+b,0) / stabHistory.length;
+  } else if (currentEffect === 'physarum') {
+    if (stepN > 400)  stability = Math.min(1, (stepN - 400)  / 4000);
+  } else {
+    if (stepN > 300)  stability = Math.min(1, (stepN - 300)  / 6000);
+  }
+  document.getElementById('stabBar').style.width    = (stability * 100).toFixed(1) + '%';
+  document.getElementById('stepCount').textContent  = 'Step ' + stepN;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function hexToRgb01(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return [(v>>16)/255, ((v>>8)&0xFF)/255, (v&0xFF)/255];
+}
+
+function getEffectiveColors() {
+  if (colorMode === 'bw') {
+    const fg = isDark ? [1,1,1] : [0,0,0];
+    const bg = isDark ? [0,0,0] : [1,1,1];
+    return { bg, c1: fg, c2: fg };
+  }
+  return { bg: clrBg, c1: clrC1, c2: clrC2 };
+}
+
+function render() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, simW, simH);
+
+  let srcTex, srcType;
+  switch (currentEffect) {
+    case 'physarum': srcTex = phys.trRead; srcType = 0; break;
+    case 'rdmaze':
+    case 'rdspots':  srcTex = rd.read;     srcType = 1; break;
+    case 'life':     srcTex = life.tex;    srcType = 2; break;
+  }
+
+  const p = progs.display;
+  gl.useProgram(p);
+  bindTex(p, 'u_tex', 0, srcTex);
+  gl.uniform1i(gl.getUniformLocation(p,'u_srcType'),   srcType);
+  gl.uniform1i(gl.getUniformLocation(p,'u_colorMode'),
+    colorMode === 'bw' ? 0 : colorMode === '2tone' ? 1 : 2);
+
+  const { bg, c1, c2 } = getEffectiveColors();
+  gl.uniform3fv(gl.getUniformLocation(p,'u_bg'), bg);
+  gl.uniform3fv(gl.getUniformLocation(p,'u_c1'), c1);
+  gl.uniform3fv(gl.getUniformLocation(p,'u_c2'), c2);
+  drawQuad(p);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN LOOP
+// ─────────────────────────────────────────────────────────────────────────────
+let rafId = null;
+
+function mainLoop() {
+  if (playing) {
+    const spf = stepsPerFrame;
+    for (let i = 0; i < spf; i++) {
+      switch (currentEffect) {
+        case 'physarum': physStep();  break;
+        case 'rdmaze':
+        case 'rdspots':  rdStep();   break;
+        case 'life':     lifeStep(); break;
+      }
+      stepN++;
+    }
+    tickStability();
+  }
+  render();
+  rafId = requestAnimationFrame(mainLoop);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESET
+// ─────────────────────────────────────────────────────────────────────────────
+function resetEffect() {
+  stepN = 0; stability = 0; stabHistory = []; prevLifeArr = null;
+  physTime = 0;
+  document.getElementById('stabBar').style.width   = '0%';
+  document.getElementById('stepCount').textContent = 'Step 0';
+  rebuildMask();
+  switch (currentEffect) {
+    case 'physarum': initPhysarum(); break;
+    case 'rdmaze':   RP.f=0.029; RP.k=0.057; initRD(); break;
+    case 'rdspots':  RP.f=0.034; RP.k=0.0618; initRD(); break;
+    case 'life':     initLife(); break;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CANVAS SIZING
+// ─────────────────────────────────────────────────────────────────────────────
+function fitCanvas() {
+  const vw = window.innerWidth  - 272 - 20;
+  const vh = window.innerHeight - 20;
+  const scale = Math.min(vw / simW, vh / simH, 1);
+  canvas.style.width  = Math.round(simW * scale) + 'px';
+  canvas.style.height = Math.round(simH * scale) + 'px';
+}
+
+function applyCanvasSize(w, h) {
+  simW = w; simH = h;
+  canvas.width  = w; canvas.height = h;
+  fitCanvas();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────────────────────────────────────────────
+function exportPNG() {
+  render();
+  const a = document.createElement('a');
+  a.download = 'spirit-type.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function exportSVG() {
+  render();
+  const data = canvas.toDataURL('image/png');
+  const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="${simW}" height="${simH}">` +
+               `<image href="${data}" width="${simW}" height="${simH}"/></svg>`;
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.download = 'spirit-type.svg';
+  a.href = URL.createObjectURL(blob);
+  a.click();
+}
+
+function toggleRecord() {
+  if (isRec) {
+    mediaRec.stop();
+    isRec = false;
+    document.getElementById('recBtn').classList.remove('rec-on');
+    document.getElementById('recBtn').textContent = 'REC';
+  } else {
+    const stream  = canvas.captureStream(30);
+    const mtype   = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+                    ? 'video/webm;codecs=vp9' : 'video/webm';
+    const chunks  = [];
+    mediaRec = new MediaRecorder(stream, { mimeType: mtype });
+    mediaRec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    mediaRec.onstop = () => {
+      const blob = new Blob(chunks, { type: mtype });
+      const a = document.createElement('a');
+      a.download = 'spirit-type.webm';
+      a.href = URL.createObjectURL(blob);
+      a.click();
+    };
+    mediaRec.start(200);
+    isRec = true;
+    document.getElementById('recBtn').classList.add('rec-on');
+    document.getElementById('recBtn').textContent = '■ STOP';
+    if (!playing) { playing = true; updatePlayBtn(); }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const b = document.getElementById('errorBanner');
+  b.textContent = msg; b.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('errorBanner').style.display = 'none';
+}
+
+function updatePlayBtn() {
+  const btn = document.getElementById('playBtn');
+  const ico = document.getElementById('playIcon');
+  btn.classList.toggle('play-on',  playing);
+  btn.classList.toggle('play-off', !playing);
+  if (playing) {
+    ico.innerHTML = `<rect x="2" y="2" width="4" height="10" rx="1"/><rect x="8" y="2" width="4" height="10" rx="1"/>`;
+  } else {
+    ico.innerHTML = `<path d="M3 2l9 5-9 5z"/>`;
+  }
+}
+
+function setSliderSync(id, valId, fmt) {
+  const sl = document.getElementById(id);
+  const vd = document.getElementById(valId);
+  const sync = () => {
+    const v = parseFloat(sl.value);
+    vd.textContent = typeof fmt === 'function' ? fmt(v) : v;
+  };
+  sync();
+  return sl;
+}
+
+function selectEffect(eff) {
+  currentEffect = eff;
+  document.querySelectorAll('#effectPills .pill-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.effect === eff));
+  document.getElementById('params-physarum').classList.toggle('active', eff === 'physarum');
+  document.getElementById('params-rd').classList.toggle('active',       eff === 'rdmaze' || eff === 'rdspots');
+  document.getElementById('params-life').classList.toggle('active',     eff === 'life');
+  // Sync RD sliders to effect defaults
+  if (eff === 'rdmaze') {
+    RP.f = 0.029; RP.k = 0.057;
+    document.getElementById('rdF').value = 0.029;
+    document.getElementById('rdK').value = 0.057;
+    document.getElementById('rdFVal').textContent = '0.029';
+    document.getElementById('rdKVal').textContent = '0.057';
+  } else if (eff === 'rdspots') {
+    RP.f = 0.034; RP.k = 0.0618;
+    document.getElementById('rdF').value = 0.034;
+    document.getElementById('rdK').value = 0.0618;
+    document.getElementById('rdFVal').textContent = '0.034';
+    document.getElementById('rdKVal').textContent = '0.062';
+  }
+  // Tune default stepsPerFrame
+  stepsPerFrame = eff === 'physarum' ? 1 : eff === 'life' ? 2 : 6;
+  // Sync multiplier display
+  document.getElementById('speedMultVal').textContent = '1';
+  document.getElementById('speedMult').value = 1;
+  resetEffect();
+}
+
+function selectColorMode(mode) {
+  colorMode = mode;
+  document.querySelectorAll('#colorPills .pill-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.color === mode));
+  const showPickers = mode !== 'bw';
+  document.getElementById('colorPickers').style.display = showPickers ? 'block' : 'none';
+  document.getElementById('c2item').style.display = mode === '3tone' ? '' : 'none';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETUP UI EVENTS
+// ─────────────────────────────────────────────────────────────────────────────
+function setupUI() {
+  // ── Section collapse toggles ───────────────────────────────────────────────
+  document.querySelectorAll('.section-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const body = document.getElementById('sec-' + btn.dataset.sec);
+      const now  = body.classList.toggle('open');
+      btn.classList.toggle('open', now);
+    });
+  });
+
+  // ── Text controls ──────────────────────────────────────────────────────────
+  let textTimer;
+  const scheduleReset = (ms) => { clearTimeout(textTimer); textTimer = setTimeout(resetEffect, ms); };
+  document.getElementById('txtInput').addEventListener('input',  () => scheduleReset(600));
+  document.getElementById('fontSel').addEventListener('change',  () => scheduleReset(300));
+  document.getElementById('fontWeight').addEventListener('change',() => scheduleReset(300));
+
+  setSliderSync('fontSize',      'fontSizeVal',      v => Math.round(v));
+  document.getElementById('fontSize').addEventListener('input', () => scheduleReset(300));
+
+  setSliderSync('letterSpacing', 'letterSpacingVal', v => Math.round(v));
+  document.getElementById('letterSpacing').addEventListener('input', () => scheduleReset(300));
+
+  // ── Effect pills ───────────────────────────────────────────────────────────
+  document.querySelectorAll('#effectPills .pill-btn').forEach(b =>
+    b.addEventListener('click', () => selectEffect(b.dataset.effect)));
+
+  // ── Physarum sliders ───────────────────────────────────────────────────────
+  setSliderSync('agentCount', 'agentCountVal', v => Math.round(v));
+  document.getElementById('agentCount').addEventListener('change', () => {
+    PP.agentCount = parseInt(document.getElementById('agentCount').value);
+    // Only re-init if really changed
+  });
+
+  const physSlider = (id, valId, fmt, setter) => {
+    setSliderSync(id, valId, fmt);
+    document.getElementById(id).addEventListener('input', () => {
+      setter(parseFloat(document.getElementById(id).value));
+    });
+  };
+  physSlider('sensorAngle', 'sensorAngleVal', v => Math.round(v),  v => { PP.sensorAngle = v * Math.PI/180; });
+  physSlider('sensorDist',  'sensorDistVal',  v => Math.round(v),  v => { PP.sensorDist  = v; });
+  physSlider('turnAngle',   'turnAngleVal',   v => Math.round(v),  v => { PP.turnAngle   = v * Math.PI/180; });
+  physSlider('physSpeed',   'physSpeedVal',   v => v.toFixed(1),   v => { PP.speed       = v; });
+  physSlider('decay',       'decayVal',       v => v.toFixed(3),   v => { PP.decay       = v; });
+
+  // ── RD sliders ─────────────────────────────────────────────────────────────
+  const rdSlider = (id, valId, fmt, key) => {
+    setSliderSync(id, valId, fmt);
+    document.getElementById(id).addEventListener('input', () => {
+      RP[key] = parseFloat(document.getElementById(id).value);
+    });
+  };
+  rdSlider('rdF',  'rdFVal',  v => v.toFixed(3), 'f');
+  rdSlider('rdK',  'rdKVal',  v => v.toFixed(3), 'k');
+  rdSlider('rdDA', 'rdDAVal', v => v.toFixed(3), 'dA');
+  rdSlider('rdDB', 'rdDBVal', v => v.toFixed(3), 'dB');
+  rdSlider('rdDT', 'rdDTVal', v => v.toFixed(1), 'dt');
+
+  // ── Life pills & sliders ───────────────────────────────────────────────────
+  document.querySelectorAll('#lifePills .pill-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      lifeVariant = b.dataset.life;
+      document.querySelectorAll('#lifePills .pill-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      scheduleReset(200);
+    });
+  });
+  setSliderSync('lifeDensity', 'lifeDensityVal', v => v.toFixed(2));
+  document.getElementById('lifeDensity').addEventListener('change', () => {
+    lifeDensity = parseFloat(document.getElementById('lifeDensity').value);
+  });
+
+  // ── Color mode ─────────────────────────────────────────────────────────────
+  document.querySelectorAll('#colorPills .pill-btn').forEach(b =>
+    b.addEventListener('click', () => selectColorMode(b.dataset.color)));
+
+  ['colorBg','colorC1','colorC2'].forEach(id => {
+    document.getElementById(id).addEventListener('input', function() {
+      const rgb = hexToRgb01(this.value);
+      const suffix = id.replace('color','');
+      document.getElementById('prev'+suffix).style.background = this.value;
+      if (id==='colorBg')      clrBg = rgb;
+      else if (id==='colorC1') clrC1 = rgb;
+      else                     clrC2 = rgb;
+    });
+  });
+
+  // ── Canvas size ────────────────────────────────────────────────────────────
+  document.getElementById('applyCanvas').addEventListener('click', () => {
+    const w = Math.max(100, Math.min(2400, parseInt(document.getElementById('canvasW').value)||800));
+    const h = Math.max(100, Math.min(1600, parseInt(document.getElementById('canvasH').value)||400));
+    applyCanvasSize(w, h);
+    resetEffect();
+  });
+
+  // ── Toolbar ────────────────────────────────────────────────────────────────
+  document.getElementById('playBtn').addEventListener('click', () => {
+    playing = !playing; updatePlayBtn();
+  });
+  document.getElementById('resetBtn').addEventListener('click', resetEffect);
+  document.getElementById('stepBtn').addEventListener('click', () => {
+    switch (currentEffect) {
+      case 'physarum': physStep();  break;
+      case 'rdmaze':
+      case 'rdspots':  rdStep();   break;
+      case 'life':     lifeStep(); break;
+    }
+    stepN++;
+    tickStability();
+    render();
+  });
+  document.getElementById('speedMult').addEventListener('input', function() {
+    const v   = parseInt(this.value);
+    const base = currentEffect==='physarum' ? 1 : currentEffect==='life' ? 2 : 6;
+    stepsPerFrame = base * v;
+    document.getElementById('speedMultVal').textContent = v;
+  });
+
+  // ── Exports ────────────────────────────────────────────────────────────────
+  document.getElementById('exportPng').addEventListener('click', exportPNG);
+  document.getElementById('exportSvg').addEventListener('click', exportSVG);
+  document.getElementById('recBtn').addEventListener('click', toggleRecord);
+
+  // ── Theme ──────────────────────────────────────────────────────────────────
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    isDark = !isDark;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  });
+
+  // ── Keyboard ───────────────────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); playing = !playing; updatePlayBtn(); }
+    if (e.code === 'KeyR')  { e.preventDefault(); resetEffect(); }
+  });
+
+  // ── Window resize ──────────────────────────────────────────────────────────
+  window.addEventListener('resize', fitCanvas);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOTSTRAP
+// ─────────────────────────────────────────────────────────────────────────────
+function bootstrap() {
+  applyCanvasSize(simW, simH);
+  if (!initWebGL()) return;
+  compilePrograms();
+  setupUI();
+  selectColorMode('bw');
+  selectEffect('physarum'); // triggers resetEffect → initPhysarum
+  updatePlayBtn();
+  mainLoop();
+}
+
+window.addEventListener('load', bootstrap);
+</script>
+</body>
+</html>
